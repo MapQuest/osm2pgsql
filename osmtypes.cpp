@@ -289,6 +289,7 @@ void osmdata_t::stop() {
      */
     {
         way_cb_func callback;
+        /* Build a list of callback functions from each output backend. */
         BOOST_FOREACH(output_t *out, outs) {
             middle_t::way_cb_func *way_callback = out->way_callback();
             if (way_callback != NULL) {
@@ -296,7 +297,14 @@ void osmdata_t::stop() {
             }
         }
         if (!callback.empty()) {
+            /* Tell the middle layer to iterate over ways, but give it the output callback
+             * so it can get the results into the DB.
+             */
             mid->iterate_ways( callback );
+
+            /* Call finish from each callback for each output backend.
+             * Finish does (something?)
+            */
             callback.finish(append);
 
             mid->commit();
