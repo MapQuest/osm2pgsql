@@ -464,6 +464,7 @@ int output_pgsql_t::way_add(osmid_t id, osmid_t *nds, int nd_count, struct keyva
   return 0;
 }
 
+
 /* This is the workhorse of pgsql_add_relation, split out because it is used as the callback for iterate relations */
 int output_pgsql_t::pgsql_process_relation(osmid_t id, const struct member *members, int member_count, struct keyval *tags, int exists)
 {
