@@ -824,7 +824,7 @@ void middle_pgsql_t::iterate_ways(middle_t::way_cb_func &callback)
         time(&end);
         fprintf(stderr, "\rprocessing way (%dk) at %.2fk/s", count/1000,
                 end > start ? ((double)count / 1000.0 / (double)(end - start)) : 0);
-    } while (result.second);
+    } while (!result.second);
 
     fprintf(stderr, "\nAll child processes exited\n");
 
@@ -1069,7 +1069,7 @@ void middle_pgsql_t::iterate_relations(middle_t::rel_cb_func &callback)
         time(&end);
         fprintf(stderr, "\rprocessing relation (%d) at %.2f/s", count,
                 end > start ? ((double)count / (double)(end - start)) : 0);
-    } while (result.second);
+    } while (!result.second);
 
     PQclear(res_rels);
     fprintf(stderr, "\n");

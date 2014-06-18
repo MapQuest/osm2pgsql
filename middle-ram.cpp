@@ -206,7 +206,7 @@ void middle_ram_t::iterate_relations(middle_t::rel_cb_func &callback)
         result = callback.finish(10, 0);
         rel_out_count += result.first;
         fprintf(stderr, "\rWriting relation (%u)\n", rel_out_count);
-    } while (result.second);
+    } while (!result.second);
 }
 
 void middle_ram_t::iterate_ways(middle_t::way_cb_func &callback)
@@ -252,7 +252,7 @@ void middle_ram_t::iterate_ways(middle_t::way_cb_func &callback)
         result = callback.finish(1000, 0);
         way_out_count += result.first;
         fprintf(stderr, "\rWriting way (%uk)\n", way_out_count/1000);
-    } while (result.second);
+    } while (!result.second);
 }
 
 void middle_ram_t::release_relations()
