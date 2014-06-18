@@ -172,7 +172,7 @@ int middle_ram_t::nodes_get_list(struct osmNode *nodes, const osmid_t *ndids, in
 
 void middle_ram_t::iterate_relations(middle_t::rel_cb_func &callback)
 {
-    int block, offset;
+    int block, offset, rel_out_count = 0;
 
     // to maintain backwards compatibility, we need to set this flag
     // which fakes the previous behaviour of having deleted all the
@@ -191,17 +191,24 @@ void middle_ram_t::iterate_relations(middle_t::rel_cb_func &callback)
                 if (rel_out_count % 10 == 0)
                     fprintf(stderr, "\rWriting relation (%u)", rel_out_count);
 
-                callback(id, rels[block][offset].members, rels[block][offset].member_count, rels[block][offset].tags, 0);
+                rel_out_count += callback(id, rels[block][offset].members, rels[block][offset].member_count, rels[block][offset].tags, 0);
             }
         }
     }
+
+    /* Call finish so that the callback can process any extra pending
+     * items that it is handling for itself. For example, in the
+     * output-pgsql, some ways and relations are marked pending due
+     * to their tag values.
+     */
+    rel_out_count += callback.finish(0);
 
     fprintf(stderr, "\rWriting relation (%u)\n", rel_out_count);
 }
 
 void middle_ram_t::iterate_ways(middle_t::way_cb_func &callback)
 {
-    int block, offset, ndCount = 0;
+    int block, offset, ndCount = 0, way_out_count = 0;
     struct osmNode *nodes;
 
     fprintf(stderr, "\n");
@@ -222,7 +229,7 @@ void middle_ram_t::iterate_ways(middle_t::way_cb_func &callback)
 
                     if (nodes) {
                         osmid_t id = block2id(block, offset);
-                        callback(id, ways[block][offset].tags, nodes, ndCount, 0);
+                        way_out_count += callback(id, ways[block][offset].tags, nodes, ndCount, 0);
                         free(nodes);
                     }
 
@@ -231,6 +238,14 @@ void middle_ram_t::iterate_ways(middle_t::way_cb_func &callback)
             }
         }
     }
+
+    /* Call finish so that the callback can process any extra pending
+     * items that it is handling for itself. For example, in the
+     * output-pgsql, some ways and relations are marked pending due
+     * to their tag values.
+     */
+    way_out_count += callback.finish(0);
+
     fprintf(stderr, "\rWriting way (%uk)\n", way_out_count/1000);
 }
 
@@ -386,7 +401,7 @@ void middle_ram_t::commit(void) {
 }
 
 middle_ram_t::middle_ram_t():
-    ways(), rels(), way_blocks(0), way_out_count(0), rel_out_count(0), cache(),
+    ways(), rels(), way_blocks(0), cache(),
     simulate_ways_deleted(false)
 {
     ways.resize(NUM_BLOCKS); memset(&ways[0], 0, NUM_BLOCKS * sizeof ways[0]);
