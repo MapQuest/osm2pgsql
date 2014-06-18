@@ -94,8 +94,32 @@ int output_multi_t::way_cb_func::operator()(osmid_t id, keyval *tags, const osmN
     return count_way;
 }
 
-int output_multi_t::way_cb_func::finish(int exists) {
-    return run_internal_until(std::numeric_limits<osmid_t>::max(), exists);
+std::pair<int, bool> output_multi_t::way_cb_func::finish(int max_count, int exists) {
+    keyval tags_int;
+    osmNode *nodes_int;
+    int count_int, count_way = 0;
+
+    /* Loop through the pending ways up to id*/
+    while ((count_way < max_count) &&
+           (m_next_internal_id < std::numeric_limits<osmid_t>::max())) {
+        initList(&tags_int);
+        /* Try to fetch the way from the DB */
+        if (!m_ptr->m_mid->ways_get(m_next_internal_id, &tags_int, &nodes_int, &count_int)) {
+            /* Check if it's marked as done */
+            if (!m_ptr->ways_done_tracker->is_marked(m_next_internal_id)) {
+                /* Output the way */
+                m_ptr->reprocess_way(m_next_internal_id,  nodes_int, count_int, &tags_int, exists);
+                ++count_way;
+            }
+
+            free(nodes_int);
+        }
+        resetList(&tags_int);
+
+        m_next_internal_id = m_ptr->ways_pending_tracker->pop_mark();
+    }
+
+    return std::make_pair(count_way, m_next_internal_id == std::numeric_limits<osmid_t>::max());
 }
 
 int output_multi_t::way_cb_func::run_internal_until(osmid_t id, int exists) {
@@ -147,8 +171,26 @@ int output_multi_t::rel_cb_func::operator()(osmid_t id, const member *mems, int 
     return count_rel;
 }
 
-int output_multi_t::rel_cb_func::finish(int exists) {
-    return run_internal_until(std::numeric_limits<osmid_t>::max(), exists);
+std::pair<int, bool> output_multi_t::rel_cb_func::finish(int max_count, int exists) {
+    keyval tags_int;
+    member *members_int;
+    int count_int, count_rel = 0;
+
+    while ((count_rel < max_count) &&
+           (m_next_internal_id < std::numeric_limits<osmid_t>::max())) {
+        initList(&tags_int);
+        if (!m_ptr->m_mid->relations_get(m_next_internal_id, &members_int, &count_int, &tags_int)) {
+            m_ptr->process_relation(m_next_internal_id, members_int, count_int, &tags_int, exists);
+            ++count_rel;
+
+            free(members_int);
+        }
+        resetList(&tags_int);
+
+        m_next_internal_id = m_ptr->rels_pending_tracker->pop_mark();
+    }
+
+    return std::make_pair(count_rel, m_next_internal_id == std::numeric_limits<osmid_t>::max());
 }
 
 int output_multi_t::rel_cb_func::run_internal_until(osmid_t id, int exists) {

@@ -735,7 +735,8 @@ int middle_pgsql_t::ways_delete(osmid_t osm_id)
 void middle_pgsql_t::iterate_ways(middle_t::way_cb_func &callback)
 {
     PGresult   *res_ways;
-    int i, count = 0;
+    int i, count = 0, next_count = 0;
+    const int count_increment = 1000;
     /* The flag we pass to indicate that the way in question might exist already in the database */
     int exists = Append;
     time_t start, end;
@@ -787,11 +788,13 @@ void middle_pgsql_t::iterate_ways(middle_t::way_cb_func &callback)
         struct osmNode *nodes;
         int nd_count;
 
-        if (count++ % 1000 == 0) {
+        if (count >= next_count) {
             time(&end);
             fprintf(stderr, "\rprocessing way (%dk) at %.2fk/s", count/1000,
                     end > start ? ((double)count / 1000.0 / (double)(end - start)) : 0);
         }
+        while (count >= next_count) { next_count += count_increment; }
+        ++count;
 
         initList(&tags);
         if( ways_get(id, &tags, &nodes, &nd_count) )
@@ -814,7 +817,14 @@ void middle_pgsql_t::iterate_ways(middle_t::way_cb_func &callback)
      * output-pgsql, some ways and relations are marked pending due
      * to their tag values.
      */
-    count += callback.finish(exists);
+    std::pair<int, bool> result;
+    do {
+        result = callback.finish(count_increment, exists);
+        count += result.first;
+        time(&end);
+        fprintf(stderr, "\rprocessing way (%dk) at %.2fk/s", count/1000,
+                end > start ? ((double)count / 1000.0 / (double)(end - start)) : 0);
+    } while (result.second);
 
     fprintf(stderr, "\nAll child processes exited\n");
 
@@ -1000,7 +1010,8 @@ int middle_pgsql_t::relations_delete(osmid_t osm_id)
 void middle_pgsql_t::iterate_relations(middle_t::rel_cb_func &callback)
 {
     PGresult   *res_rels;
-    int i, count = 0;
+    int i, count = 0, next_count = 0;
+    const int count_increment = 10;
     /* The flag we pass to indicate that the way in question might exist already in the database */
     int exists = Append;
 
@@ -1027,11 +1038,13 @@ void middle_pgsql_t::iterate_relations(middle_t::rel_cb_func &callback)
         struct member *members;
         int member_count;
 
-        if (count++ %10 == 0) {
+        if (count >= next_count) {
             time(&end);
             fprintf(stderr, "\rprocessing relation (%d) at %.2f/s", count,
                     end > start ? ((double)count / (double)(end - start)) : 0);
         }
+        while (count >= next_count) { next_count += count_increment; }
+        ++count;
 
         initList(&tags);
         if(relations_get(id, &members, &member_count, &tags) )
@@ -1049,7 +1062,14 @@ void middle_pgsql_t::iterate_relations(middle_t::rel_cb_func &callback)
      * output-pgsql, some ways and relations are marked pending due
      * to their tag values.
      */
-    count += callback.finish(exists);
+    std::pair<int, bool> result;
+    do {
+        result = callback.finish(count_increment, exists);
+        count += result.first;
+        time(&end);
+        fprintf(stderr, "\rprocessing relation (%d) at %.2f/s", count,
+                end > start ? ((double)count / (double)(end - start)) : 0);
+    } while (result.second);
 
     PQclear(res_rels);
     fprintf(stderr, "\n");

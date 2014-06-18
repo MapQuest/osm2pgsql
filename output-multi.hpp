@@ -60,7 +60,7 @@ private:
         way_cb_func(output_multi_t *ptr);
         virtual ~way_cb_func();
         int operator()(osmid_t id, keyval *tags, const osmNode *nodes, int count, int exists);
-        int finish(int exists);
+        std::pair<int, bool> finish(int max_count, int exists);
         int run_internal_until(osmid_t id, int exists);
     };
     struct rel_cb_func : public middle_t::rel_cb_func  {
@@ -70,7 +70,7 @@ private:
         rel_cb_func(output_multi_t *ptr);
         virtual ~rel_cb_func();
         int operator()(osmid_t id, const member *, int member_count, keyval *rel_tags, int exists);
-        int finish(int exists);
+        std::pair<int, bool> finish(int max_count, int exists);
         int run_internal_until(osmid_t id, int exists);
     };
 

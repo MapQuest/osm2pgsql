@@ -165,12 +165,15 @@ struct way_cb_func : public middle_t::way_cb_func {
         }
         return count_additional;
     }
-    int finish(int exists) {
+    std::pair<int, bool> finish(int max_count, int exists) {
         int count = 0;
+        bool finished = true;
         BOOST_FOREACH(middle_t::way_cb_func *ptr, m_ptrs) {
-            count += ptr->finish(exists);
+            std::pair<int, bool> result = ptr->finish(max_count, exists);
+            count += result.first;
+            finished = finished && result.second;
         }
-        return count;
+        return std::make_pair(count, finished);
     }
     std::vector<middle_t::way_cb_func*> m_ptrs;
 };
@@ -191,12 +194,15 @@ struct rel_cb_func : public middle_t::rel_cb_func {
         }
         return count;
     }
-    int finish(int exists) {
+    std::pair<int, bool> finish(int max_count, int exists) {
         int count = 0;
+        bool finished = true;
         BOOST_FOREACH(middle_t::rel_cb_func *ptr, m_ptrs) {
-            count += ptr->finish(exists);
+            std::pair<int, bool> result = ptr->finish(max_count, exists);
+            count += result.first;
+            finished = finished && result.second;
         }
-        return count;
+        return std::make_pair(count, finished);
     }
     std::vector<middle_t::rel_cb_func*> m_ptrs;
 };
