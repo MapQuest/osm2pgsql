@@ -264,29 +264,33 @@ output_pgsql_t::way_cb_func::way_cb_func(output_pgsql_t *ptr)
 output_pgsql_t::way_cb_func::~way_cb_func() {}
 
 int output_pgsql_t::way_cb_func::operator()(osmid_t id, struct keyval *tags, const struct osmNode *nodes, int count, int exists) {
+    int count_way = 0;
+
     if (m_next_internal_id < id) {
-        run_internal_until(id, exists);
+        count_way += run_internal_until(id, exists);
     }
 
     if (m_next_internal_id == id) {
         m_next_internal_id = m_ptr->ways_pending_tracker->pop_mark();
     }
 
-    if (m_ptr->ways_done_tracker->is_marked(id)) {
-        return 0;
-    } else {
-        return m_ptr->pgsql_out_way(id, tags, nodes, count, exists);
+    if (!m_ptr->ways_done_tracker->is_marked(id)) {
+        // TODO: some warning or error if this fails? the function definition
+        // currently doesn't look like it can fail?
+        m_ptr->pgsql_out_way(id, tags, nodes, count, exists);
     }
+
+    return count_way;
 }
 
-void output_pgsql_t::way_cb_func::finish(int exists) {
-    run_internal_until(std::numeric_limits<osmid_t>::max(), exists);
+int output_pgsql_t::way_cb_func::finish(int exists) {
+    return run_internal_until(std::numeric_limits<osmid_t>::max(), exists);
 }
 
-void output_pgsql_t::way_cb_func::run_internal_until(osmid_t id, int exists) {
+int output_pgsql_t::way_cb_func::run_internal_until(osmid_t id, int exists) {
     struct keyval tags_int;
     struct osmNode *nodes_int;
-    int count_int;
+    int count_int, count_way = 0;
 
     /* Loop through the pending ways up to id*/
     while (m_next_internal_id < id) {
@@ -297,6 +301,7 @@ void output_pgsql_t::way_cb_func::run_internal_until(osmid_t id, int exists) {
             if (!m_ptr->ways_done_tracker->is_marked(m_next_internal_id)) {
                 /* Output the way */
                 m_ptr->pgsql_out_way(m_next_internal_id, &tags_int, nodes_int, count_int, exists);
+                ++count_way;
             }
             
             free(nodes_int);
@@ -305,6 +310,8 @@ void output_pgsql_t::way_cb_func::run_internal_until(osmid_t id, int exists) {
         
         m_next_internal_id = m_ptr->ways_pending_tracker->pop_mark();
     }
+
+    return count_way;
 }
 
 output_pgsql_t::rel_cb_func::rel_cb_func(output_pgsql_t *ptr)
@@ -315,30 +322,34 @@ output_pgsql_t::rel_cb_func::rel_cb_func(output_pgsql_t *ptr)
 output_pgsql_t::rel_cb_func::~rel_cb_func() {}
 
 int output_pgsql_t::rel_cb_func::operator()(osmid_t id, const struct member *mems, int member_count, struct keyval *rel_tags, int exists) {
+    int count_rel = 0;
+
     if (m_next_internal_id < id) {
-        run_internal_until(id, exists);
+        count_rel += run_internal_until(id, exists);
     }
 
     if (m_next_internal_id == id) {
         m_next_internal_id = m_ptr->rels_pending_tracker->pop_mark();
     }
 
-    return m_ptr->pgsql_process_relation(id, mems, member_count, rel_tags, exists);
+    m_ptr->pgsql_process_relation(id, mems, member_count, rel_tags, exists);
+    return count_rel;
 }
 
-void output_pgsql_t::rel_cb_func::finish(int exists) {
-    run_internal_until(std::numeric_limits<osmid_t>::max(), exists);
+int output_pgsql_t::rel_cb_func::finish(int exists) {
+    return run_internal_until(std::numeric_limits<osmid_t>::max(), exists);
 }
 
-void output_pgsql_t::rel_cb_func::run_internal_until(osmid_t id, int exists) {
+int output_pgsql_t::rel_cb_func::run_internal_until(osmid_t id, int exists) {
     struct keyval tags_int;
     struct member *members_int;
-    int count_int;
+    int count_int, count_rel = 0;
     
     while (m_next_internal_id < id) {
         initList(&tags_int);
         if (!m_ptr->m_mid->relations_get(m_next_internal_id, &members_int, &count_int, &tags_int)) {
             m_ptr->pgsql_process_relation(m_next_internal_id, members_int, count_int, &tags_int, exists);
+            ++count_rel;
             
             free(members_int);
         }
@@ -346,6 +357,8 @@ void output_pgsql_t::rel_cb_func::run_internal_until(osmid_t id, int exists) {
         
         m_next_internal_id = m_ptr->rels_pending_tracker->pop_mark();
     }
+
+    return count_rel;
 }
 
 void output_pgsql_t::commit()

@@ -54,8 +54,8 @@ private:
         way_cb_func(output_pgsql_t *ptr);
         virtual ~way_cb_func();
         int operator()(osmid_t id, struct keyval *tags, const struct osmNode *nodes, int count, int exists);
-        void finish(int exists);
-        void run_internal_until(osmid_t id, int exists);
+        int finish(int exists);
+        int run_internal_until(osmid_t id, int exists);
     };
     struct rel_cb_func : public middle_t::rel_cb_func  {
         output_pgsql_t *m_ptr;
@@ -64,8 +64,8 @@ private:
         rel_cb_func(output_pgsql_t *ptr);
         virtual ~rel_cb_func();
         int operator()(osmid_t id, const struct member *, int member_count, struct keyval *rel_tags, int exists);
-        void finish(int exists);
-        void run_internal_until(osmid_t id, int exists);
+        int finish(int exists);
+        int run_internal_until(osmid_t id, int exists);
     };
 
     friend struct way_cb_func;

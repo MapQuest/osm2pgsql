@@ -159,16 +159,18 @@ struct way_cb_func : public middle_t::way_cb_func {
         }
     }
     int operator()(osmid_t id, struct keyval *tags, const struct osmNode *nodes, int count, int exists) {
-        int status = 0;
+        int count_additional = 0;
         BOOST_FOREACH(middle_t::way_cb_func *ptr, m_ptrs) {
-            status |= ptr->operator()(id, tags, nodes, count, exists);
+            count_additional += ptr->operator()(id, tags, nodes, count, exists);
         }
-        return status;
+        return count_additional;
     }
-    void finish(int exists) { 
+    int finish(int exists) {
+        int count = 0;
         BOOST_FOREACH(middle_t::way_cb_func *ptr, m_ptrs) {
-            ptr->finish(exists);
+            count += ptr->finish(exists);
         }
+        return count;
     }
     std::vector<middle_t::way_cb_func*> m_ptrs;
 };
@@ -183,16 +185,18 @@ struct rel_cb_func : public middle_t::rel_cb_func {
         }
     }
     int operator()(osmid_t id, const struct member *members, int member_count, struct keyval *tags, int exists) {
-        int status = 0;
+        int count = 0;
         BOOST_FOREACH(middle_t::rel_cb_func *ptr, m_ptrs) {
-            status |= ptr->operator()(id, members, member_count, tags, exists);
+            count += ptr->operator()(id, members, member_count, tags, exists);
         }
-        return status;
+        return count;
     }
-    void finish(int exists) { 
+    int finish(int exists) {
+        int count = 0;
         BOOST_FOREACH(middle_t::rel_cb_func *ptr, m_ptrs) {
-            ptr->finish(exists);
+            count += ptr->finish(exists);
         }
+        return count;
     }
     std::vector<middle_t::rel_cb_func*> m_ptrs;
 };
@@ -212,7 +216,7 @@ void osmdata_t::stop() {
     // should be the same for all outputs
     const int append = outs[0]->get_options()->append;
 
-	/* Pending ways
+    /* Pending ways
      * This stage takes ways which were processed earlier, but might be
      * involved in a multipolygon relation. They could also be ways that
      * were modified in diff processing.
@@ -231,11 +235,6 @@ void osmdata_t::stop() {
              * so it can get the results into the DB.
              */
             mid->iterate_ways( callback );
-
-            /* Call finish from each callback for each output backend.
-             * Finish does (something?)
-            */
-            callback.finish(append);
 
             mid->commit();
             BOOST_FOREACH(output_t *out, outs) {
@@ -259,7 +258,6 @@ void osmdata_t::stop() {
         }
         if (!callback.empty()) {
             mid->iterate_relations( callback );
-            callback.finish(append);
 
             mid->commit();
             BOOST_FOREACH(output_t *out, outs) {

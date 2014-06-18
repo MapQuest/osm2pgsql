@@ -46,13 +46,23 @@ struct middle_t : public middle_query_t {
 
     struct way_cb_func {
         virtual ~way_cb_func();
+        // returns the number of *additional* ways processed, i.e: ones which are
+        // pending due to logic specfic to the output.
         virtual int operator()(osmid_t id, struct keyval *tags, const struct osmNode *nodes, int count, int exists) = 0;
-        virtual void finish(int exists) = 0;
+        // extra phase to drain any additional ways which are pending due to logic
+        // specific to the output. returns the number of ways processed in the
+        // finish phase.
+        virtual int finish(int exists) = 0;
     };
     struct rel_cb_func {
         virtual ~rel_cb_func();
+        // returns the number of *additional* relations processed, i.e: ones which are
+        // pending due to logic specfic to the output.
         virtual int operator()(osmid_t id, const struct member *, int member_count, struct keyval *rel_tags, int exists) = 0;
-        virtual void finish(int exists) = 0;
+        // extra phase to drain any additional relations which are pending due to logic
+        // specific to the output. returns the number of relations processed in the
+        // finish phase.
+        virtual int finish(int exists) = 0;
     };
 
     virtual void iterate_ways(way_cb_func &cb) = 0;

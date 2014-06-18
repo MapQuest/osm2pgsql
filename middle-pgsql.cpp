@@ -738,9 +738,9 @@ void middle_pgsql_t::iterate_ways(middle_t::way_cb_func &callback)
     int i, count = 0;
     /* The flag we pass to indicate that the way in question might exist already in the database */
     int exists = Append;
-
     time_t start, end;
     time(&start);
+
     fprintf(stderr, "\nGoing over pending ways...\n");
 
     /* Make sure we're out of copy mode */
@@ -787,7 +787,7 @@ void middle_pgsql_t::iterate_ways(middle_t::way_cb_func &callback)
         struct osmNode *nodes;
         int nd_count;
 
-        if (count++ %1000 == 0) {
+        if (count++ % 1000 == 0) {
             time(&end);
             fprintf(stderr, "\rprocessing way (%dk) at %.2fk/s", count/1000,
                     end > start ? ((double)count / 1000.0 / (double)(end - start)) : 0);
@@ -797,7 +797,7 @@ void middle_pgsql_t::iterate_ways(middle_t::way_cb_func &callback)
         if( ways_get(id, &tags, &nodes, &nd_count) )
           continue;
           
-        callback(id, &tags, nodes, nd_count, exists);
+        count += callback(id, &tags, nodes, nd_count, exists);
         ways_done( id );
 
         free(nodes);
@@ -809,17 +809,23 @@ void middle_pgsql_t::iterate_ways(middle_t::way_cb_func &callback)
         tables[t_way].transactionMode = 0;
     }
 
-    time(&end);
-    fprintf(stderr, "\rProcess %i finished processing %i ways in %i sec\n", 0, count, (int)(end - start));
+    /* Call finish so that the callback can process any extra pending
+     * items that it is handling for itself. For example, in the
+     * output-pgsql, some ways and relations are marked pending due
+     * to their tag values.
+     */
+    count += callback.finish(exists);
 
     fprintf(stderr, "\nAll child processes exited\n");
 
     fprintf(stderr, "\n");
-    time(&end);
-    if (end - start > 0)
-        fprintf(stderr, "%i Pending ways took %ds at a rate of %.2f/s\n",PQntuples(res_ways), (int)(end - start), 
-                ((double)PQntuples(res_ways) / (double)(end - start)));
     PQclear(res_ways);
+
+    time(&end);
+    if (end - start > 0) {
+        fprintf(stderr, "%i Pending ways took %ds at a rate of %.2f/s\n", count, 
+                (int)(end - start), (double(count) / double(end - start)));
+    }
 }
 
 int middle_pgsql_t::way_changed(osmid_t osm_id)
@@ -1031,21 +1037,28 @@ void middle_pgsql_t::iterate_relations(middle_t::rel_cb_func &callback)
         if(relations_get(id, &members, &member_count, &tags) )
           continue;
           
-        callback(id, members, member_count, &tags, exists);
+        count += callback(id, members, member_count, &tags, exists);
         relations_done( id );
 
         free(members);
         resetList(&tags);
     }
-    time(&end);
-    fprintf(stderr, "\rProcess %i finished processing %i relations in %i sec\n", 0, count, (int)(end - start));
 
-    time(&end);
-    if (end - start > 0)
-        fprintf(stderr, "%i Pending relations took %ds at a rate of %.2f/s\n",PQntuples(res_rels), (int)(end - start), ((double)PQntuples(res_rels) / (double)(end - start)));
+    /* Call finish so that the callback can process any extra pending
+     * items that it is handling for itself. For example, in the
+     * output-pgsql, some ways and relations are marked pending due
+     * to their tag values.
+     */
+    count += callback.finish(exists);
+
     PQclear(res_rels);
     fprintf(stderr, "\n");
+    time(&end);
 
+    if (end - start > 0) {
+        fprintf(stderr, "%i Pending relations took %ds at a rate of %.2f/s\n",
+                count, (int)(end - start), (double(count) / double(end - start)));
+    }
 }
 
 int middle_pgsql_t::relation_changed(osmid_t osm_id)
