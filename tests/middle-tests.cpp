@@ -60,7 +60,7 @@ struct way_cb_func : public middle_t::way_cb_func {
         return 0; // looks like this is ignored anyway?
     }
 
-    void finish(int) { }
+    std::pair<int, bool> finish(int, int) { return std::make_pair(0, true); }
 };
 
 int test_way_set(middle_t *mid)
