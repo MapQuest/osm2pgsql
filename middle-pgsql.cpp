@@ -49,6 +49,8 @@
 #include <boost/format.hpp>
 #include <boost/unordered_map.hpp>
 
+using std::string;
+
 struct progress_info {
   time_t start;
   time_t end;
@@ -123,43 +125,26 @@ int pgsql_connect(std::vector<middle_pgsql_t::table_desc> &tables,
     return 0;
 }
 
-char *pgsql_store_nodes(const osmid_t *nds, const int& nd_count)
+const string pgsql_store_nodes(const osmid_t *nds, const int& nd_count)
+/*
+ * Takes a list of nodes and produces a string for the array that can then be
+ * passed to PostgreSQL, e.g. {1,2,3}
+ */
 {
-  static char *buffer;
-  static int buflen;
-
-  char *ptr;
-  int i, first;
-    
-  if( buflen <= nd_count * 10 )
+  std::stringstream ostr;
+  bool first = true;
+  ostr << "{";
+  for(int i=0; i<nd_count; i++ )
   {
-    buflen = ((nd_count * 10) | 4095) + 1;  // Round up to next page */
-    buffer = (char *)realloc( buffer, buflen );
-  }
-_restart:
-
-  ptr = buffer;
-  first = 1;
-  *ptr++ = '{';
-  for( i=0; i<nd_count; i++ )
-  {
-    if( !first ) *ptr++ = ',';
-    ptr += sprintf(ptr, "%" PRIdOSMID, nds[i] );
-    
-    if( (ptr-buffer) > (buflen-20) ) // Almost overflowed? */
+    if (!first)
     {
-      buflen <<= 1;
-      buffer = (char *)realloc( buffer, buflen );
-      
-      goto _restart;
+      ostr << ",";
     }
-    first = 0;
+    ostr << nds[i];
+    first = false;
   }
-  
-  *ptr++ = '}';
-  *ptr++ = 0;
-  
-  return buffer;
+  ostr << "}";
+  return ostr.str();
 }
 
 // Special escape routine for escaping strings in array constants: double quote, backslash,newline, tab*/
@@ -575,11 +560,11 @@ int middle_pgsql_t::ways_set(osmid_t way_id, osmid_t *nds, int nd_count, struct 
     if( way_table->copyMode )
     {
       const char *tag_buf = pgsql_store_tags(tags,1);
-      char *node_buf = pgsql_store_nodes(nds, nd_count);
-      int length = strlen(tag_buf) + strlen(node_buf) + 64;
+      const string node_buf = pgsql_store_nodes(nds, nd_count);
+      int length = strlen(tag_buf) + node_buf.length() + 64;
       buffer = (char *)alloca(length);
       if( snprintf( buffer, length, "%" PRIdOSMID "\t%s\t%s\n",
-              way_id, node_buf, tag_buf ) > (length-10) )
+              way_id, node_buf.c_str(), tag_buf ) > (length-10) )
       { fprintf( stderr, "buffer overflow way id %" PRIdOSMID "\n", way_id); return 1; }
       pgsql_CopyData(__FUNCTION__, way_table->sql_conn, buffer);
       return 0;
@@ -588,7 +573,7 @@ int middle_pgsql_t::ways_set(osmid_t way_id, osmid_t *nds, int nd_count, struct 
     char *ptr = buffer;
     paramValues[0] = ptr;
     sprintf(ptr, "%" PRIdOSMID, way_id);
-    paramValues[1] = pgsql_store_nodes(nds, nd_count);
+    paramValues[1] = pgsql_store_nodes(nds, nd_count).c_str();
     paramValues[2] = pgsql_store_tags(tags,0);
     pgsql_execPrepared(way_table->sql_conn, "insert_way", 3, (const char * const *)paramValues, PGRES_COMMAND_OK);
     return 0;
@@ -798,11 +783,11 @@ int middle_pgsql_t::relations_set(osmid_t id, struct member *members, int member
     {
       char *tag_buf = strdup(pgsql_store_tags(tags,1));
       const char *member_buf = pgsql_store_tags(&member_list,1);
-      char *parts_buf = pgsql_store_nodes(all_parts, all_count);
-      int length = strlen(member_buf) + strlen(tag_buf) + strlen(parts_buf) + 64;
+      const string parts_buf = pgsql_store_nodes(all_parts, all_count);
+      int length = strlen(member_buf) + strlen(tag_buf) + parts_buf.length() + 64;
       buffer = (char *)alloca(length);
       if( snprintf( buffer, length, "%" PRIdOSMID "\t%d\t%d\t%s\t%s\t%s\n",
-              id, node_count, node_count+way_count, parts_buf, member_buf, tag_buf ) > (length-10) )
+              id, node_count, node_count+way_count, parts_buf.c_str(), member_buf, tag_buf ) > (length-10) )
       { fprintf( stderr, "buffer overflow relation id %" PRIdOSMID "\n", id); return 1; }
       free(tag_buf);
       keyval::resetList(&member_list);
@@ -817,7 +802,7 @@ int middle_pgsql_t::relations_set(osmid_t id, struct member *members, int member
     ptr += sprintf(ptr, "%d", node_count ) + 1;
     paramValues[2] = ptr;
     sprintf( ptr, "%d", node_count+way_count );
-    paramValues[3] = pgsql_store_nodes(all_parts, all_count);
+    paramValues[3] = pgsql_store_nodes(all_parts, all_count).c_str();
     paramValues[4] = pgsql_store_tags(&member_list,0);
     if( paramValues[4] )
         paramValues[4] = strdup(paramValues[4]);
